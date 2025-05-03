@@ -18,19 +18,20 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 # Import the asynchronous secret retrieval function
 from keyvault import get_secret
 
-load_dotenv()
+from configuration import Configuration
+config = Configuration()
 
 # Helper functions for reading environment variables
 def read_env_variable(var_name, default=None):
-    value = os.getenv(var_name, default)
+    value = config.get_value(var_name, default)
     return value.strip() if value else default
 
 def read_env_list(var_name):
-    value = os.getenv(var_name, "")
+    value = config.get_value(var_name, "")
     return [item.strip() for item in value.split(",") if item.strip()]
 
 def read_env_boolean(var_name, default=False):
-    value = os.getenv(var_name, str(default)).strip().lower()
+    value = config.get_value(var_name, str(default)).strip().lower()
     return value in ['true', '1', 'yes']
 
 # Read Environment Variables
@@ -43,11 +44,11 @@ LOGLEVEL = read_env_variable('LOGLEVEL', 'INFO').upper()
 ENABLE_AUTHENTICATION = read_env_boolean('ENABLE_AUTHENTICATION')
 FORWARD_ACCESS_TOKEN_TO_ORCHESTRATOR = read_env_boolean('FORWARD_ACCESS_TOKEN_TO_ORCHESTRATOR')
 OTHER_AUTH_SCOPES = read_env_list('OTHER_AUTH_SCOPES')
-CLIENT_ID = os.getenv("CLIENT_ID", "your_client_id")
-APP_SERVICE_CLIENT_SECRET_NAME = os.getenv("APP_SERVICE_CLIENT_SECRET_NAME", "appServiceClientSecretKey")
-FLASK_SECRET_KEY_NAME = os.getenv("FLASK_SECRET_KEY_NAME", "flaskSecretKey")
-AUTHORITY = os.getenv("AUTHORITY", "https://login.microsoftonline.com/your_tenant_id")
-REDIRECT_PATH = os.getenv("REDIRECT_PATH", "/getAToken")  # Must match the Azure AD app registration redirect URI.
+CLIENT_ID = config.get_value("CLIENT_ID", "your_client_id")
+APP_SERVICE_CLIENT_SECRET_NAME = config.get_value("APP_SERVICE_CLIENT_SECRET_NAME", "appServiceClientSecretKey")
+FLASK_SECRET_KEY_NAME = config.get_value("FLASK_SECRET_KEY_NAME", "flaskSecretKey")
+AUTHORITY = config.get_value("AUTHORITY", "https://login.microsoftonline.com/your_tenant_id")
+REDIRECT_PATH = config.get_value("REDIRECT_PATH", "/getAToken")  # Must match the Azure AD app registration redirect URI.
 SCOPE = [
     "User.Read"
 ]
@@ -81,9 +82,9 @@ def get_managed_identity_token():
     return token
 
 def get_function_key():
-    subscription_id = os.getenv('AZURE_SUBSCRIPTION_ID')
-    resource_group = os.getenv('AZURE_RESOURCE_GROUP_NAME')
-    function_app_name = os.getenv('AZURE_ORCHESTRATOR_FUNC_NAME')
+    subscription_id = config.get_value('AZURE_SUBSCRIPTION_ID')
+    resource_group = config.get_value('AZURE_RESOURCE_GROUP_NAME')
+    function_app_name = config.get_value('AZURE_ORCHESTRATOR_FUNC_NAME')
     token = get_managed_identity_token()
     logging.info("[webbackend] Obtaining function key.")
     

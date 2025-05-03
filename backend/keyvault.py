@@ -11,9 +11,12 @@ from azure.core.exceptions import ResourceNotFoundError, ClientAuthenticationErr
 # KEY VAULT 
 ##########################################################
 
+from configuration import Configuration
+config = Configuration()
+
 async def async_get_secret(secretName):
     try:
-        keyVaultName = os.environ["AZURE_KEY_VAULT_NAME"]
+        keyVaultName = config.get_value["AZURE_KEY_VAULT_NAME"]
         KVUri = f"https://{keyVaultName}.vault.azure.net"
         async with ChainedTokenCredential(
                 ManagedIdentityCredential(),
@@ -39,7 +42,7 @@ async def async_get_secret(secretName):
 
 def get_secret(secretName):
     try:
-        keyVaultName = os.environ["AZURE_KEY_VAULT_NAME"]
+        keyVaultName = config.get_value["AZURE_KEY_VAULT_NAME"]
         KVUri = f"https://{keyVaultName}.vault.azure.net"
         
         # Create the chained credential using synchronous classes.
