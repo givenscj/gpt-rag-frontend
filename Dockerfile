@@ -23,6 +23,15 @@ RUN cp -r /backend /app
 
 COPY backend/ .
 
+ADD backend/host-keys.json /runtime/secrets/host.json
+
+ENV FUNCTIONS_SECRETS_PATH=/runtime/secrets
+
+#USER ContainerAdministrator
+#RUN icacls "/runtime/secrets" /t /grant Users:M
+#USER ContainerUser
+#ENV AzureWebJobsSecretStorageType=files
+
 RUN pip install -r requirements.txt --break-system-packages
  
 # Expose the port your app runs on
@@ -30,3 +39,4 @@ EXPOSE 8000
  
 # Define the command to run your app
 CMD ["python3", "app.py"]
+#CMD ["gunicorn", "-c", "python:config.gunicorn", "backend.app:create_app()"]

@@ -6,7 +6,6 @@ from urllib.parse import unquote
 import uuid
 import requests
 
-from azure.identity import ManagedIdentityCredential, AzureCliCredential, ChainedTokenCredential
 from azure.storage.blob import BlobServiceClient
 from dotenv import load_dotenv
 from flask import Flask, Response, jsonify, request, session, redirect, url_for
@@ -15,8 +14,7 @@ import msal
 from flask_session import Session
 from werkzeug.middleware.proxy_fix import ProxyFix
 
-# Import the asynchronous secret retrieval function
-from keyvault import get_secret
+load_dotenv()
 
 from configuration import Configuration
 config = Configuration()
@@ -37,7 +35,7 @@ def read_env_boolean(var_name, default=False):
 # Read Environment Variables
 SPEECH_REGION = read_env_variable('SPEECH_REGION')
 ORCHESTRATOR_ENDPOINT = read_env_variable('ORCHESTRATOR_ENDPOINT')
-STORAGE_ACCOUNT = read_env_variable('STORAGE_ACCOUNT')
+STORAGE_ACCOUNT_NAME = read_env_variable('STORAGE_ACCOUNT_NAME')
 LOGLEVEL = read_env_variable('LOGLEVEL', 'INFO').upper()
 
 # MSAL / OIDC configuration for custom authentication
@@ -69,42 +67,43 @@ logging.basicConfig(level=LOGLEVEL)
 # Load secrets from Key Vault using the asynchronous function at startup.
 # This avoids having to call asyncio.run() repeatedly in your helper functions.
 # ------------------------------------------------------------------------------
-FLASK_SECRET_KEY =  get_secret(FLASK_SECRET_KEY_NAME)
-APP_SERVICE_CLIENT_SECRET = get_secret(APP_SERVICE_CLIENT_SECRET_NAME)
+FLASK_SECRET_KEY =  read_env_variable(FLASK_SECRET_KEY_NAME)
+APP_SERVICE_CLIENT_SECRET = read_env_variable(APP_SERVICE_CLIENT_SECRET_NAME)
 
 # Obtain the token using Managed Identity
 def get_managed_identity_token():
-    credential = ChainedTokenCredential(
-        ManagedIdentityCredential(),
-        AzureCliCredential()
-    )
-    token = credential.get_token("https://management.azure.com/.default").token
+    token = config.credential.get_token("https://management.azure.com/.default").token
     return token
 
 def get_function_key():
-    subscription_id = config.get_value('AZURE_SUBSCRIPTION_ID')
-    resource_group = config.get_value('AZURE_RESOURCE_GROUP_NAME')
-    function_app_name = config.get_value('AZURE_ORCHESTRATOR_FUNC_NAME')
-    token = get_managed_identity_token()
-    logging.info("[webbackend] Obtaining function key.")
-    
-    # URL to get all function keys, including the default one
-    requestUrl = f"https://management.azure.com/subscriptions/{subscription_id}/resourceGroups/{resource_group}/providers/Microsoft.Web/sites/{function_app_name}/functions/orc/listKeys?api-version=2022-03-01"
-    
-    requestHeaders = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json"
-    }
-    
-    response = requests.post(requestUrl, headers=requestHeaders)
-    response_json = json.loads(response.content.decode('utf-8'))
-    
-    try:
-        # Assuming you want to get the 'default' key
-        function_key = response_json['default']
-    except KeyError as e:
-        function_key = None
-        logging.error(f"[webbackend] Error when getting function key. Details: {str(e)}.")
+
+    function_key = config.get_value('AZURE_ORCHESTRATOR_FUNC_KEY')
+
+    if (function_key == None) or (function_key == ""):
+
+        subscription_id = config.get_value('AZURE_SUBSCRIPTION_ID')
+        resource_group = config.get_value('AZURE_RESOURCE_GROUP_NAME')
+        function_app_name = config.get_value('AZURE_ORCHESTRATOR_FUNC_NAME')
+        token = get_managed_identity_token()
+        logging.info("[webbackend] Obtaining function key.")
+        
+        # URL to get all function keys, including the default one
+        requestUrl = f"https://management.azure.com/subscriptions/{subscription_id}/resourceGroups/{resource_group}/providers/Microsoft.Web/sites/{function_app_name}/functions/orc/listKeys?api-version=2022-03-01"
+        
+        requestHeaders = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        
+        response = requests.post(requestUrl, headers=requestHeaders)
+        response_json = json.loads(response.content.decode('utf-8'))
+        
+        try:
+            # Assuming you want to get the 'default' key
+            function_key = response_json['default']
+        except KeyError as e:
+            function_key = None
+            logging.error(f"[webbackend] Error when getting function key. Details: {str(e)}.")
     
     return function_key
 
@@ -351,9 +350,12 @@ def chatgpt():
             payload['access_token'] = access_token
 
         headers = {
-            'Content-Type': 'application/json',
-            'x-functions-key': function_key  
+            'Content-Type': 'application/json'            
         }
+
+        if function_key != None:
+            headers['x-functions-key'] = function_key
+
         logging.info(f"[webbackend] calling orchestrator at: {ORCHESTRATOR_ENDPOINT}")        
         response = requests.post(url, headers=headers, json=payload)
         logging.info(f"[webbackend] response: {response.text[:100]}...")
@@ -396,10 +398,10 @@ def getGptSpeechToken():
 
 @app.route("/api/get-storage-account", methods=["GET"])
 def getStorageAccount():
-    if not STORAGE_ACCOUNT:
-        return jsonify({"error": "Add STORAGE_ACCOUNT to frontend app settings"}), 500
+    if not STORAGE_ACCOUNT_NAME:
+        return jsonify({"error": "Add STORAGE_ACCOUNT_NAME to frontend app settings"}), 500
     try:
-        return json.dumps({'storageaccount': STORAGE_ACCOUNT})
+        return json.dumps({'storageaccount': STORAGE_ACCOUNT_NAME})
     except Exception as e:
         logging.exception("[webbackend] exception in /api/get-storage-account")
         return jsonify({"error": str(e)}), 500
@@ -409,13 +411,9 @@ def getBlob():
     blob_name = unquote(request.json["blob_name"])
     logging.info(f"Starting getBlob function for blob: {blob_name}")
     try:
-        client_credential = ChainedTokenCredential(
-            ManagedIdentityCredential(),
-            AzureCliCredential()
-        )
         blob_service_client = BlobServiceClient(
-            f"https://{STORAGE_ACCOUNT}.blob.core.windows.net",
-            client_credential
+            f"https://{STORAGE_ACCOUNT_NAME}.blob.core.windows.net",
+            config.credential
         )
         blob_client = blob_service_client.get_blob_client(container='documents', blob=blob_name)
         blob_data = blob_client.download_blob()
