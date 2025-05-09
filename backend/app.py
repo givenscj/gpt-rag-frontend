@@ -81,29 +81,32 @@ def get_managed_identity_token():
     return token
 
 def get_function_key():
-    subscription_id = os.getenv('AZURE_SUBSCRIPTION_ID')
-    resource_group = os.getenv('AZURE_RESOURCE_GROUP_NAME')
-    function_app_name = os.getenv('AZURE_ORCHESTRATOR_FUNC_NAME')
-    token = get_managed_identity_token()
-    logging.info("[webbackend] Obtaining function key.")
-    
-    # URL to get all function keys, including the default one
-    requestUrl = f"https://management.azure.com/subscriptions/{subscription_id}/resourceGroups/{resource_group}/providers/Microsoft.Web/sites/{function_app_name}/functions/orc/listKeys?api-version=2022-03-01"
-    
-    requestHeaders = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json"
-    }
-    
-    response = requests.post(requestUrl, headers=requestHeaders)
-    response_json = json.loads(response.content.decode('utf-8'))
-    
-    try:
-        # Assuming you want to get the 'default' key
-        function_key = response_json['default']
-    except KeyError as e:
-        function_key = None
-        logging.error(f"[webbackend] Error when getting function key. Details: {str(e)}.")
+    function_key = os.getenv('AZURE_ORCH_FUNCTION_KEY', None)
+
+    if function_key != None:
+        subscription_id = os.getenv('AZURE_SUBSCRIPTION_ID')
+        resource_group = os.getenv('AZURE_RESOURCE_GROUP_NAME')
+        function_app_name = os.getenv('AZURE_ORCHESTRATOR_FUNC_NAME')
+        token = get_managed_identity_token()
+        logging.info("[webbackend] Obtaining function key.")
+        
+        # URL to get all function keys, including the default one
+        requestUrl = f"https://management.azure.com/subscriptions/{subscription_id}/resourceGroups/{resource_group}/providers/Microsoft.Web/sites/{function_app_name}/functions/orc/listKeys?api-version=2022-03-01"
+        
+        requestHeaders = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        
+        response = requests.post(requestUrl, headers=requestHeaders)
+        response_json = json.loads(response.content.decode('utf-8'))
+        
+        try:
+            # Assuming you want to get the 'default' key
+            function_key = response_json['default']
+        except KeyError as e:
+            function_key = None
+            logging.error(f"[webbackend] Error when getting function key. Details: {str(e)}.")
     
     return function_key
 
