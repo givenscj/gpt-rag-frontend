@@ -36,7 +36,17 @@ def read_env_boolean(var_name, default=False):
 SPEECH_REGION = read_env_variable('SPEECH_REGION')
 ORCHESTRATOR_ENDPOINT = read_env_variable('ORCHESTRATOR_ENDPOINT')
 STORAGE_ACCOUNT_NAME = read_env_variable('STORAGE_ACCOUNT_NAME')
-LOGLEVEL = read_env_variable('LOGLEVEL', 'INFO').upper()
+LOGLEVEL = read_env_variable('LOGLEVEL', 'DEBUG').upper()
+
+#Convert to logging level
+if LOGLEVEL == 'DEBUG':
+    LOGLEVEL = logging.DEBUG
+elif LOGLEVEL == 'INFO':
+    LOGLEVEL = logging.INFO
+elif LOGLEVEL == 'WARNING':
+    LOGLEVEL = logging.WARNING
+elif LOGLEVEL == 'ERROR':
+    LOGLEVEL = logging.ERROR
 
 # MSAL / OIDC configuration for custom authentication
 ENABLE_AUTHENTICATION = read_env_boolean('ENABLE_AUTHENTICATION')
@@ -358,6 +368,16 @@ def chatgpt():
 
         logging.info(f"[webbackend] calling orchestrator at: {ORCHESTRATOR_ENDPOINT}")        
         response = requests.post(url, headers=headers, json=payload)
+
+        if (response.status_code != 200):
+            logging.error(f"[webbackend] Error from orchestrator: {response.status_code} - {response.content}")
+            response = {
+                "answer": "Error in application backend.",
+                "thoughts": "",
+                "conversation_id": conversation_id
+            }
+            return jsonify(response)
+        
         logging.info(f"[webbackend] response: {response.text[:100]}...")
         return response.text
     except Exception as e:
