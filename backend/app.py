@@ -37,16 +37,7 @@ SPEECH_REGION = read_env_variable('SPEECH_REGION')
 ORCHESTRATOR_ENDPOINT = read_env_variable('ORCHESTRATOR_ENDPOINT')
 STORAGE_ACCOUNT_NAME = read_env_variable('STORAGE_ACCOUNT_NAME')
 LOGLEVEL = read_env_variable('LOGLEVEL', 'DEBUG').upper()
-
-#Convert to logging level
-if LOGLEVEL == 'DEBUG':
-    LOGLEVEL = logging.DEBUG
-elif LOGLEVEL == 'INFO':
-    LOGLEVEL = logging.INFO
-elif LOGLEVEL == 'WARNING':
-    LOGLEVEL = logging.WARNING
-elif LOGLEVEL == 'ERROR':
-    LOGLEVEL = logging.ERROR
+LOGLEVEL = getattr(logging, LOGLEVEL, logging.INFO)
 
 # MSAL / OIDC configuration for custom authentication
 ENABLE_AUTHENTICATION = read_env_boolean('ENABLE_AUTHENTICATION')
